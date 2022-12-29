@@ -137,7 +137,7 @@ class Job:
 
 	def extractData(self, url: str) -> Customer:
 		self.browser.get(url)
-		time.sleep(0.5)
+		time.sleep(0.75)
 
 		phonePrefix = '+ 41'
 		phoneContainer = self.getElement(value='PIDgt')
@@ -245,8 +245,11 @@ if __name__ == '__main__':
 
 	urls = set()
 
-
+	i = 1
+	retry_rows = 0
+	retry = 0
 	while True:
+		print(f'Reading page {i}')
 		for link in job.getElements(value='kzMV1'):
 			if DEBUG and len(urls) > 14:
 				break
@@ -259,6 +262,12 @@ if __name__ == '__main__':
 		try:
 			spans = job.getElements(value='mask')
 			if not spans:
+				retry_rows += 1
+				if retry_rows < 10:
+					print('Button row not found, trying again')
+					time.sleep(0.5)
+					continue
+
 				raise Exception()
 
 			button = None
@@ -271,11 +280,25 @@ if __name__ == '__main__':
 
 			if button:
 				if button.is_enabled():
-					job.click(button, 2)
+					i += 1
+					retry = 0
+					retry_rows = 0
+					job.click(button, 0.5)
 				else:
+					retry += 1
+					if retry < 10:
+						print('Button found but not enabled, trying again')
+						time.sleep(0.5)
+						continue
 					raise Exception()
 			else:
-				raise Exception()
+				retry += 1
+				if retry < 10:
+					print('Failed finding button, trying again')
+					time.sleep(0.5)
+					continue
+				else:
+					raise Exception()
 		except:
 			print('That was the last page!')
 			break
@@ -285,8 +308,11 @@ if __name__ == '__main__':
 
 	customers = list()
 	for url in urls:
-		data = job.extractData(url)
-		customers.append(data)
+		try:
+			data = job.extractData(url)
+			customers.append(data)
+		except:
+			print(f'Failed extracting data for customer on url {url}')
 
 	print(f'Extracted {len(customers)} customers')
 	print('Dumping to csv')
