@@ -10,6 +10,7 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.remote.webelement import WebElement
 
+DEBUG = True
 EMAIL = ''
 PASSWORD = ''
 
@@ -233,12 +234,12 @@ if __name__ == '__main__':
 
 	while True:
 		for link in job.getElements(value='kzMV1'):
-			if len(urls) > 5:
+			if DEBUG and len(urls) > 20:
 				break
 			url = link.get_attribute('href')
 			urls.add(url)
 
-		if len(urls) > 5:
+		if DEBUG and len(urls) > 20:
 			break
 
 		try:
