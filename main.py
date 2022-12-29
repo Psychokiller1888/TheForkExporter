@@ -1,3 +1,4 @@
+import argparse
 import re
 import time
 from dataclasses import dataclass
@@ -10,9 +11,6 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.remote.webelement import WebElement
 
-DEBUG = True
-EMAIL = ''
-PASSWORD = ''
 
 @dataclass
 class Customer:
@@ -169,6 +167,11 @@ class Job:
 		customerBehaviors = self.getElements(value='tf-n7xbu5')
 		for info in customerBehaviors:
 			data = self.getElement(value='tf-1a9sr1e', rootElement=info).get_attribute('data-restaurant')
+			if data:
+				data = int(data)
+			else:
+				continue
+
 			if info.get_property('innerHTML').endswith('reservations'):
 				reservations = data
 			elif info.get_property('innerHTML').endswith('cancellations'):
@@ -196,19 +199,30 @@ class Job:
 			drinks = self.getInputValue(by=By.NAME, value='favDrinks'),
 			seating = self.getInputValue(by=By.NAME, value='favSeating'),
 			notes = self.getInputValue(by=By.NAME, value='notesOnCustomer'),
-			reservations = int(reservations),
-			cancellations = int(cancellations),
-			noShows = int(noShows)
+			reservations = reservations,
+			cancellations = cancellations,
+			noShows = noShows
 		)
 		return customer
 
 
 
 if __name__ == '__main__':
+	parser = argparse.ArgumentParser(description='TheFork customer data extractor', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+	parser.add_argument('-u', '--user', help='TheFork account user', required=True, type=str)
+	parser.add_argument('-p', '--password', help='TheFork account password', required=True, type=str)
+	parser.add_argument('-d', '--debug', help='Limit the extracted data to 15 customers', required=False, type=bool)
+	args = parser.parse_args()
+	config = vars(args)
+
+	EMAIL = config['user']
+	PASSWORD = config['password']
+	DEBUG = config['debug']
+
 	job = Job()
 
 	element = job.getElement(value='tf-15l7y55')
-	print('Please solve the Google ReCaptcha')
+	print('Please solve the Google ReCaptcha manually if any pops up')
 	while not element:
 		job.searchAndClick(value='evidon-banner-acceptbutton', noExit=True, silent=True)
 		username = job.getElement(by=By.NAME, value='username')
@@ -234,12 +248,12 @@ if __name__ == '__main__':
 
 	while True:
 		for link in job.getElements(value='kzMV1'):
-			if DEBUG and len(urls) > 20:
+			if DEBUG and len(urls) > 14:
 				break
 			url = link.get_attribute('href')
 			urls.add(url)
 
-		if DEBUG and len(urls) > 20:
+		if DEBUG and len(urls) > 14:
 			break
 
 		try:
