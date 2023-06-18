@@ -2,6 +2,7 @@ import argparse
 import re
 import time
 from dataclasses import dataclass
+import random
 from typing import List, Optional
 
 from dataclass_csv import DataclassWriter
@@ -10,6 +11,10 @@ from selenium.webdriver import Chrome
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.remote.webelement import WebElement
+
+import undetected_chromedriver as uc
+
+import chromedriver_autoinstaller
 
 
 @dataclass
@@ -37,15 +42,26 @@ class Customer:
 	noShows: int = 0
 
 class Job:
-	def __init__(self):
+	def __init__(self, proxy: str = ''):
 		self.browser: Optional[Chrome] = None
+		self.proxy: Optional[str] = proxy
+		chromedriver_autoinstaller.install()
 		self.start()
 
 	def start(self):
 		print('Starting Chrome')
 		options = Options()
 		options.add_experimental_option(name='detach', value=True)
+		options.add_argument('--disable-blink-features=AutomationControlled')
+		options.add_experimental_option('excludeSwitches', ['enable-automation'])
+		options.add_experimental_option('useAutomationExtension', False)
+
+		if self.proxy:
+			options.add_argument(f'--proxy-server={self.proxy}')
+
 		self.browser = Chrome(options=options)
+		#self.browser.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+		#self.browser = uc.Chrome()
 		self.browser.get('https://manager.thefork.com/')
 
 
@@ -212,14 +228,16 @@ if __name__ == '__main__':
 	parser.add_argument('-u', '--user', help='TheFork account user', required=True, type=str)
 	parser.add_argument('-p', '--password', help='TheFork account password', required=True, type=str)
 	parser.add_argument('-d', '--debug', help='Limit the extracted data to 15 customers', required=False, type=bool)
+	parser.add_argument('-x', '--proxy', help='Use a proxy to avoid bot detection, enter IP_OF_PROXY:PORT', required=False, type=str)
 	args = parser.parse_args()
 	config = vars(args)
 
 	EMAIL = config['user']
 	PASSWORD = config['password']
 	DEBUG = config['debug']
+	PROXY = config['proxy']
 
-	job = Job()
+	job = Job(proxy=PROXY)
 
 	element = job.getElement(value='tf-15l7y55')
 	print('Please solve the Google ReCaptcha manually if any pops up')
@@ -227,11 +245,17 @@ if __name__ == '__main__':
 		job.searchAndClick(value='evidon-banner-acceptbutton', noExit=True, silent=True)
 		username = job.getElement(by=By.NAME, value='username')
 		if username and not username.get_property('value'):
-			username.send_keys(EMAIL)
+			for letter in EMAIL:
+				username.send_keys(letter)
+				time.sleep(random.uniform(0.1, 0.3))
+			time.sleep(1.25)
 
 		password = job.getElement(by=By.NAME, value='password')
 		if password and not password.get_property('value'):
-			password.send_keys(PASSWORD)
+			for letter in PASSWORD:
+				password.send_keys(letter)
+				time.sleep(random.uniform(0.1, 0.3))
+			time.sleep(2.1)
 
 		job.searchAndClick(value='tf-1p32jew', noExit=True, silent=True)
 
