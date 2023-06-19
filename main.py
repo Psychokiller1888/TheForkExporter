@@ -74,7 +74,7 @@ class Job:
 			return None
 
 
-	def getElements(self, by: By = By.CLASS_NAME, value: str = '', rootElement: Optional[WebElement] = None) -> List[WebElement] | None:
+	def getElements(self, by: By = By.CLASS_NAME, value: str = '', rootElement: Optional[WebElement] = None) -> Optional[List[WebElement]]:
 		if not rootElement:
 			rootElement = self.browser
 		try:
