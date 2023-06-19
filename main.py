@@ -60,8 +60,8 @@ class Job:
 			options.add_argument(f'--proxy-server={self.proxy}')
 
 		self.browser = Chrome(options=options)
-		#self.browser.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
-		#self.browser = uc.Chrome()
+		self.browser.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+		#self.browser = uc.Chrome(options=options)
 		self.browser.get('https://manager.thefork.com/')
 
 
@@ -95,11 +95,11 @@ class Job:
 		return value
 
 
-	def getCheckboxValue(self, by: By = By.CLASS_NAME, value: str = '', rootElement: Optional[WebElement] = None) -> bool:
+	def getCheckboxValue(self, by: By = By.CLASS_NAME, value: str = '', rootElement: Optional[WebElement] = None) -> Optional[bool]:
 		el = self.getElement(by=by, value=value, rootElement=rootElement)
 		if not el:
 			print(f'"{value}" not found')
-			return ''
+			return None
 
 		value = el.get_attribute('data-checked')
 		if not value or value == 'false':
@@ -229,6 +229,7 @@ if __name__ == '__main__':
 	parser.add_argument('-p', '--password', help='TheFork account password', required=True, type=str)
 	parser.add_argument('-d', '--debug', help='Limit the extracted data to 15 customers', required=False, type=bool)
 	parser.add_argument('-x', '--proxy', help='Use a proxy to avoid bot detection, enter IP_OF_PROXY:PORT', required=False, type=str)
+	parser.add_argument('-m', '--manual', help='If you get snatched by bot detectors, try this option to manually login', required=False, type=bool)
 	args = parser.parse_args()
 	config = vars(args)
 
@@ -236,31 +237,44 @@ if __name__ == '__main__':
 	PASSWORD = config['password']
 	DEBUG = config['debug']
 	PROXY = config['proxy']
+	MANUAL = config['manual']
 
 	job = Job(proxy=PROXY)
 
 	element = job.getElement(value='tf-15l7y55')
-	print('Please solve the Google ReCaptcha manually if any pops up')
+	if not MANUAL:
+		print('Please solve the Google ReCaptcha manually if any pops up')
+	else:
+		print('Accept the cookies, and try to log in, I\'ll be back as soon as it\'s done!')
+
 	while not element:
-		job.searchAndClick(value='evidon-banner-acceptbutton', noExit=True, silent=True)
-		username = job.getElement(by=By.NAME, value='username')
-		if username and not username.get_property('value'):
-			for letter in EMAIL:
-				username.send_keys(letter)
-				time.sleep(random.uniform(0.1, 0.3))
-			time.sleep(1.25)
+		if not MANUAL:
+			job.searchAndClick(value='evidon-banner-acceptbutton', noExit=True, silent=True)
+			time.sleep(0.25)
+			username = job.getElement(by=By.NAME, value='username')
+			if username and not username.get_property('value'):
+				#username.click()
+				time.sleep(0.5)
+				for letter in EMAIL:
+					username.send_keys(letter)
+					time.sleep(random.uniform(0.1, 0.3))
+				time.sleep(1.25)
 
-		password = job.getElement(by=By.NAME, value='password')
-		if password and not password.get_property('value'):
-			for letter in PASSWORD:
-				password.send_keys(letter)
-				time.sleep(random.uniform(0.1, 0.3))
-			time.sleep(2.1)
+			password = job.getElement(by=By.NAME, value='password')
+			if password and not password.get_property('value'):
+				#password.click()
+				time.sleep(0.5)
+				for letter in PASSWORD:
+					password.send_keys(letter)
+					time.sleep(random.uniform(0.1, 0.3))
+				time.sleep(2.1)
 
-		job.searchAndClick(value='tf-1p32jew', noExit=True, silent=True)
+			job.searchAndClick(value='tf-1p32jew', noExit=True, silent=True)
 
-		time.sleep(1)
-		element = job.getElement(value='tf-15l7y55')
+			time.sleep(1)
+			element = job.getElement(value='tf-15l7y55')
+		else:
+			time.sleep(2.5)
 
 	print('Logged in! Now let me do the job, don\'t touch the browser!')
 
