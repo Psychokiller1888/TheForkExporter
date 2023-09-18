@@ -12,8 +12,6 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.remote.webelement import WebElement
 
-import undetected_chromedriver as uc
-
 import chromedriver_autoinstaller
 
 
@@ -42,26 +40,16 @@ class Customer:
 	noShows: int = 0
 
 class Job:
-	def __init__(self, proxy: str = ''):
+	def __init__(self):
 		self.browser: Optional[Chrome] = None
-		self.proxy: Optional[str] = proxy
 		chromedriver_autoinstaller.install()
 		self.start()
 
 	def start(self):
-		print('Starting Chrome')
+		print('Connecting Chrome')
 		options = Options()
-		options.add_experimental_option(name='detach', value=True)
-		options.add_argument('--disable-blink-features=AutomationControlled')
-		options.add_experimental_option('excludeSwitches', ['enable-automation'])
-		options.add_experimental_option('useAutomationExtension', False)
-
-		if self.proxy:
-			options.add_argument(f'--proxy-server={self.proxy}')
-
+		options.add_experimental_option('debuggerAddress', 'localhost:8989')
 		self.browser = Chrome(options=options)
-		self.browser.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
-		#self.browser = uc.Chrome(options=options)
 		self.browser.get('https://manager.thefork.com/')
 
 
@@ -228,7 +216,6 @@ if __name__ == '__main__':
 	parser.add_argument('-u', '--user', help='TheFork account user', required=True, type=str)
 	parser.add_argument('-p', '--password', help='TheFork account password', required=True, type=str)
 	parser.add_argument('-d', '--debug', help='Limit the extracted data to 15 customers', required=False, type=bool)
-	parser.add_argument('-x', '--proxy', help='Use a proxy to avoid bot detection, enter IP_OF_PROXY:PORT', required=False, type=str)
 	parser.add_argument('-m', '--manual', help='If you get snatched by bot detectors, try this option to manually login', required=False, type=bool)
 	args = parser.parse_args()
 	config = vars(args)
@@ -236,10 +223,9 @@ if __name__ == '__main__':
 	EMAIL = config['user']
 	PASSWORD = config['password']
 	DEBUG = config['debug']
-	PROXY = config['proxy']
 	MANUAL = config['manual']
 
-	job = Job(proxy=PROXY)
+	job = Job()
 
 	element = job.getElement(value='tf-15l7y55')
 	if not MANUAL:
