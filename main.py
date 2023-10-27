@@ -2,8 +2,8 @@ import argparse
 import re
 import time
 from dataclasses import dataclass
-import random
-from typing import List, Optional
+from pathlib import Path
+from typing import List, Optional, Dict
 
 from dataclass_csv import DataclassWriter
 
@@ -40,17 +40,17 @@ class Customer:
 	noShows: int = 0
 
 class Job:
-	def __init__(self):
+	def __init__(self, confs: Dict):
 		self.browser: Optional[Chrome] = None
+		self.config = confs
 		chromedriver_autoinstaller.install()
 		self.start()
 
 	def start(self):
 		print('Connecting Chrome')
 		options = Options()
-		options.add_experimental_option('debuggerAddress', 'localhost:8989')
+		options.add_experimental_option('debuggerAddress', f'localhost:{self.config["port"]}')
 		self.browser = Chrome(options=options)
-		self.browser.get('https://manager.thefork.com/')
 
 
 	def getElement(self, by: By = By.CLASS_NAME, value: str = '', rootElement: Optional[WebElement] = None) -> Optional[WebElement]:
@@ -139,195 +139,178 @@ class Job:
 		time.sleep(wait)
 
 
-	def extractData(self, url: str) -> Customer:
-		self.browser.get(url)
-		time.sleep(0.75)
+	def extractData(self, url: str, tries: int = 0, browse: bool = True) -> Optional[Customer]:
+		if tries < 5:
+			if browse:
+				self.browser.get(url)
+				time.sleep(0.75)
 
-		phonePrefix = '+ 41'
-		phoneContainer = self.getElement(value='PIDgt')
-		if phoneContainer:
-			phonePrefix = self.getElementInnerHTML(value='DNVgs', rootElement=phoneContainer)
-			match = re.search(r'\+ ([0-9]+)', phonePrefix)
-			if match:
-				phonePrefix = f'+{match.group(1)}'
-
-		birthMonth = 'January'
-		birthMonthContainer = self.getElement(value='tf-233int')
-		if birthMonthContainer:
-			birthMonth = self.getElementInnerHTML(value='chili-single-select__single-value', rootElement=birthMonthContainer)
-			if not birthMonth:
-				birthMonth = 'January'
-
-		language = 'French'
-		languageContainer = self.getElement(value='tf-1f6mg5w')
-		if languageContainer:
-			language = self.getElementInnerHTML(value='chili-single-select__single-value', rootElement=languageContainer)
-			if not language:
-				language = 'French'
-
-		reservations = 0
-		cancellations = 0
-		noShows = 0
-		customerBehaviors = self.getElements(value='tf-n7xbu5')
-		for info in customerBehaviors:
-			data = self.getElement(value='tf-1a9sr1e', rootElement=info).get_attribute('data-restaurant')
-			if data:
-				data = int(data)
+			phonePrefix = '+ 41'
+			phoneContainer = self.getElement(value='y6YeV')
+			if phoneContainer:
+				phonePrefix = self.getElementInnerHTML(value='DNVgs', rootElement=phoneContainer)
+				match = re.search(r'\+ ([0-9]+)', phonePrefix)
+				if match:
+					phonePrefix = f'+{match.group(1)}'
 			else:
-				continue
+				print('Page not yet loaded, retry')
+				time.sleep(0.25)
+				return self.extractData(url=url, tries= tries + 1, browse=False)
 
-			if info.get_property('innerHTML').endswith('reservations'):
-				reservations = data
-			elif info.get_property('innerHTML').endswith('cancellations'):
-				cancellations = data
-			elif info.get_property('innerHTML').endswith('no-shows'):
-				noShows = data
+			birthMonth = 'January'
+			birthMonthContainer = self.getElement(value='tf-1hwfws3')
+			if birthMonthContainer:
+				birthMonth = self.getElementInnerHTML(value='chili-single-select__single-value', rootElement=birthMonthContainer)
+				if not birthMonth:
+					birthMonth = 'January'
 
+			language = 'French'
+			languageContainer = self.getElement(value='tf-1hwfws3')
+			if languageContainer:
+				language = self.getElementInnerHTML(value='chili-single-select__single-value', rootElement=languageContainer)
+				if not language:
+					language = 'French'
 
-		customer = Customer(
-			title = 'mr',
-			firstName = self.getInputValue(by=By.NAME, value='firstName'),
-			lastName = self.getInputValue(by=By.NAME, value='lastName'),
-			vip = self.getCheckboxValue(by=By.ID, value='vip'),
-			birthDay = self.getInputValue(by=By.NAME, value='birthDate.day'),
-			birthMonth = birthMonth,
-			birthYear = self.getInputValue(by=By.NAME, value='birthDate.year'),
-			phone = f'{phonePrefix} {self.getInputValue(by=By.NAME, value="phone")}',
-			email = self.getInputValue(by=By.NAME, value='email'),
-			language = language,
-			address = self.getInputValue(by=By.CLASS_NAME, value='addressAutocomplete__input'),
-			newsletter = self.getCheckboxValue(by=By.ID, value='optin'),
-			allergies = '',
-			specialDiet = '',
-			food = self.getInputValue(by=By.NAME, value='favFood'),
-			drinks = self.getInputValue(by=By.NAME, value='favDrinks'),
-			seating = self.getInputValue(by=By.NAME, value='favSeating'),
-			notes = self.getInputValue(by=By.NAME, value='notesOnCustomer'),
-			reservations = reservations,
-			cancellations = cancellations,
-			noShows = noShows
-		)
-		return customer
+			reservations = 0
+			cancellations = 0
+			noShows = 0
+
+			customerBehaviors = self.getElements(value='tf-q2scvx')
+			for info in customerBehaviors:
+				data = self.getElement(value='tf-1enwdf5', rootElement=info).get_attribute('data-restaurant')
+				if data:
+					data = int(data)
+				else:
+					continue
+
+				if info.get_property('innerHTML').endswith('reservations'):
+					reservations = data
+				elif info.get_property('innerHTML').endswith('cancellations'):
+					cancellations = data
+				elif info.get_property('innerHTML').endswith('no-shows'):
+					noShows = data
+
+			customer = Customer(
+				title = 'mr',
+				firstName = self.getInputValue(by=By.NAME, value='firstName'),
+				lastName = self.getInputValue(by=By.NAME, value='lastName'),
+				vip = self.getCheckboxValue(by=By.ID, value='vip'),
+				birthDay = self.getInputValue(by=By.NAME, value='birthDate.day'),
+				birthMonth = birthMonth,
+				birthYear = self.getInputValue(by=By.NAME, value='birthDate.year'),
+				phone = f'{phonePrefix} {self.getInputValue(by=By.NAME, value="phone")}',
+				email = self.getInputValue(by=By.NAME, value='email'),
+				language = language,
+				address = self.getInputValue(by=By.CLASS_NAME, value='addressAutocomplete__input'),
+				newsletter = self.getCheckboxValue(by=By.ID, value='optin'),
+				allergies = '',
+				specialDiet = '',
+				food = self.getInputValue(by=By.NAME, value='favFood'),
+				drinks = self.getInputValue(by=By.NAME, value='favDrinks'),
+				seating = self.getInputValue(by=By.NAME, value='favSeating'),
+				notes = self.getInputValue(by=By.NAME, value='notesOnCustomer'),
+				reservations = reservations,
+				cancellations = cancellations,
+				noShows = noShows
+			)
+			return customer
+		else:
+			raise
 
 
 
 if __name__ == '__main__':
 	parser = argparse.ArgumentParser(description='TheFork customer data extractor', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-	parser.add_argument('-u', '--user', help='TheFork account user', required=True, type=str)
-	parser.add_argument('-p', '--password', help='TheFork account password', required=True, type=str)
+	parser.add_argument('-u', '--port', help='Remote debugging prot', required=False, type=int, default=9222)
 	parser.add_argument('-d', '--debug', help='Limit the extracted data to 15 customers', required=False, type=bool)
-	parser.add_argument('-m', '--manual', help='If you get snatched by bot detectors, try this option to manually login', required=False, type=bool)
+	parser.add_argument('-l', '--load', help='Load customers from file', required=False, type=bool, default=False)
 	args = parser.parse_args()
 	config = vars(args)
 
-	EMAIL = config['user']
-	PASSWORD = config['password']
+	PORT = config['port']
 	DEBUG = config['debug']
-	MANUAL = config['manual']
+	LOAD = config['load']
 
-	job = Job()
+	job = Job(config)
 
-	element = job.getElement(value='tf-15l7y55')
-	if not MANUAL:
-		print('Please solve the Google ReCaptcha manually if any pops up')
-	else:
-		print('Accept the cookies, and try to log in, I\'ll be back as soon as it\'s done!')
-
-	while not element:
-		if not MANUAL:
-			job.searchAndClick(value='evidon-banner-acceptbutton', noExit=True, silent=True)
-			time.sleep(0.25)
-			username = job.getElement(by=By.NAME, value='username')
-			if username and not username.get_property('value'):
-				#username.click()
-				time.sleep(0.5)
-				for letter in EMAIL:
-					username.send_keys(letter)
-					time.sleep(random.uniform(0.1, 0.3))
-				time.sleep(1.25)
-
-			password = job.getElement(by=By.NAME, value='password')
-			if password and not password.get_property('value'):
-				#password.click()
-				time.sleep(0.5)
-				for letter in PASSWORD:
-					password.send_keys(letter)
-					time.sleep(random.uniform(0.1, 0.3))
-				time.sleep(2.1)
-
-			job.searchAndClick(value='tf-1p32jew', noExit=True, silent=True)
-
-			time.sleep(1)
-			element = job.getElement(value='tf-15l7y55')
-		else:
-			time.sleep(2.5)
-
-	print('Logged in! Now let me do the job, don\'t touch the browser!')
-
-	job.searchAndClick(value='tf-ehlden') #search button
-	job.searchAndClick(value='tf-1aex8qq', wait=2) #advanced search
-
+	print('Let me do the job, don\'t touch the browser!')
 	urls = set()
 
-	i = 1
-	retry_rows = 0
-	retry = 0
-	while True:
-		print(f'Reading page {i}')
-		for link in job.getElements(value='kzMV1'):
+	if not LOAD:
+		job.searchAndClick(by=By.XPATH, value='//*[@id="mainContent"]/div[1]/div[1]/div[3]/div/div[1]/button') #search button
+		job.searchAndClick(value='tf-zl9zk6', wait=2) #advanced search
+
+		i = 1
+		retry_rows = 0
+		retry = 0
+		while True:
+			print(f'Reading page {i}')
+			for link in job.getElements(value='e3st0'):
+				if DEBUG and len(urls) > 14:
+					break
+				url = link.get_attribute('href')
+				result = re.search(r'https://manager\.thefork\.com/customer/(.+)/\?prevPathname=/search', url)
+				if result:
+					urls.add(f'https://manager.thefork.com/customer/{result.group(1)}/details')
+
 			if DEBUG and len(urls) > 14:
 				break
-			url = link.get_attribute('href')
-			urls.add(url)
 
-		if DEBUG and len(urls) > 14:
-			break
+			try:
+				spans = job.getElements(value='mask')
+				if not spans:
+					retry_rows += 1
+					if retry_rows < 10:
+						print('Button row not found, trying again')
+						time.sleep(0.5)
+						continue
 
-		try:
-			spans = job.getElements(value='mask')
-			if not spans:
-				retry_rows += 1
-				if retry_rows < 10:
-					print('Button row not found, trying again')
-					time.sleep(0.5)
-					continue
+					raise Exception()
 
-				raise Exception()
+				button = None
+				for span in spans:
+					if span.get_attribute('innerHTML') != 'Next':
+						continue
 
-			button = None
-			for span in spans:
-				if span.get_attribute('innerHTML') != 'Next':
-					continue
+					button = span.find_element(by=By.XPATH, value='..')
+					break
 
-				button = span.find_element(by=By.XPATH, value='..')
-				break
-
-			if button:
-				if button.is_enabled():
-					i += 1
-					retry = 0
-					retry_rows = 0
-					job.click(button, 0.5)
+				if button:
+					if button.is_enabled():
+						i += 1
+						retry = 0
+						retry_rows = 0
+						job.click(button, 0.5)
+					else:
+						retry += 1
+						if retry < 10:
+							print('Button found but not enabled, trying again')
+							time.sleep(0.5)
+							continue
+						raise Exception()
 				else:
 					retry += 1
 					if retry < 10:
-						print('Button found but not enabled, trying again')
+						print('Failed finding button, trying again')
 						time.sleep(0.5)
 						continue
-					raise Exception()
-			else:
-				retry += 1
-				if retry < 10:
-					print('Failed finding button, trying again')
-					time.sleep(0.5)
-					continue
-				else:
-					raise Exception()
-		except:
-			print('That was the last page!')
-			break
+					else:
+						raise Exception()
+			except:
+				print('That was the last page!')
+				break
+	else:
+		if Path('urls.txt').exists():
+			urls = Path('urls.txt').read_text().splitlines()
 
 	print(f'Found {len(urls)} customers')
+
+	if not LOAD:
+		print('Writing list to file')
+		with open('urls.txt', 'w') as fp:
+			for url in urls:
+				fp.write(f'{url}\n')
+
 	print('Start data extraction')
 
 	customers = list()
