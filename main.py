@@ -1,331 +1,278 @@
 import argparse
-import re
+import json
 import time
-from dataclasses import dataclass
-from pathlib import Path
-from typing import List, Optional, Dict
 
-from dataclass_csv import DataclassWriter
+import requests
 
-from selenium.webdriver import Chrome
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.common.by import By
-from selenium.webdriver.remote.webelement import WebElement
+import queries
+import sqlite3
 
-import chromedriver_autoinstaller
+parser = argparse.ArgumentParser(description='TheFork customer data extractor', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+parser.add_argument('-d', '--debug', help='Limit the extracted data to 15 customers', required=False, type=bool)
+parser.add_argument('-i', '--id', help='Your restaurant id', required=True, type=str)
+parser.add_argument('-t', '--token', help='Your authorization token', required=True, type=str)
+parser.add_argument('-f', '--fresh', help='Fetch all customer data anew, not only the new ones', required=False, type=bool, default=False)
+parser.add_argument('-r', '--resume', help='Resume with only the customers that have no data filled', required=False, type=bool, default=False)
+args = parser.parse_args()
+config = vars(args)
 
-
-@dataclass
-class Customer:
-	title: str = ''
-	firstName: str = ''
-	lastName: str = ''
-	vip: bool = False
-	birthDay: str = 1
-	birthMonth: str = 1
-	birthYear: str = 1900
-	phone: str = ''
-	email: str = ''
-	language: str = 'fr'
-	address: str = ''
-	allergies: str = ''
-	specialDiet: str = ''
-	food: str = ''
-	drinks: str = ''
-	seating: str = ''
-	notes: str = ''
-	newsletter: bool = False
-	reservations: int = 0
-	cancellations: int = 0
-	noShows: int = 0
-
-class Job:
-	def __init__(self, confs: Dict):
-		self.browser: Optional[Chrome] = None
-		self.config = confs
-		chromedriver_autoinstaller.install()
-		self.start()
-
-	def start(self):
-		print('Connecting Chrome')
-		options = Options()
-		options.add_experimental_option('debuggerAddress', f'localhost:{self.config["port"]}')
-		self.browser = Chrome(options=options)
+DEBUG = config['debug']
+RESTAURANT_ID = config['id']
+AUTH_TOKEN = config['token']
+FRESH = config['fresh']
+RESUME = config['resume']
 
 
-	def getElement(self, by: By = By.CLASS_NAME, value: str = '', rootElement: Optional[WebElement] = None) -> Optional[WebElement]:
-		if not rootElement:
-			rootElement = self.browser
-		try:
-			return rootElement.find_element(by=by, value=value)
-		except:
-			return None
-
-
-	def getElements(self, by: By = By.CLASS_NAME, value: str = '', rootElement: Optional[WebElement] = None) -> Optional[List[WebElement]]:
-		if not rootElement:
-			rootElement = self.browser
-		try:
-			return rootElement.find_elements(by=by, value=value)
-		except:
-			return None
-
-
-	def getInputValue(self, by: By = By.CLASS_NAME, value: str = '', rootElement: Optional[WebElement] = None) -> str:
-		el = self.getElement(by=by, value=value, rootElement=rootElement)
-		if not el:
-			print(f'"{value}" not found')
-			return ''
-
-		value = el.get_property('value')
-		if not value:
-			return ''
-		return value
-
-
-	def getCheckboxValue(self, by: By = By.CLASS_NAME, value: str = '', rootElement: Optional[WebElement] = None) -> Optional[bool]:
-		el = self.getElement(by=by, value=value, rootElement=rootElement)
-		if not el:
-			print(f'"{value}" not found')
-			return None
-
-		value = el.get_attribute('data-checked')
-		if not value or value == 'false':
-			return False
-
-		return True
-
-
-	def getElementInnerHTML(self, by: By = By.CLASS_NAME, value: str = '', rootElement: Optional[WebElement] = None, silent: bool = True) -> str:
-		el = self.getElement(by=by, value=value, rootElement=rootElement)
-		if not el:
-			if not silent:
-				print(f'"{value}" not found')
-			return ''
-
-		value = el.get_property('innerHTML')
-		if not value:
-			return ''
-
-		return value
-
-
-	def searchAndClick(self, by: By = By.CLASS_NAME, value: str = '', rootElement: Optional[WebElement] = None, wait: float = 1.0, noExit: bool = False, silent: bool = False) -> Optional[WebElement]:
-		el: WebElement = self.getElement(by=by, value=value, rootElement=rootElement)
-		if not el:
-			if not silent:
-				print(f'Cannot find element "{value}"')
-
-			if noExit:
-				return None
-			else:
-				exit(1)
-
-		if not el.is_enabled():
-			if not silent:
-				print(f'Element is not active')
-
-			if noExit:
-				return None
-			else:
-				exit(1)
-
-		self.click(el=el, wait=wait)
-		return el
-
-	@staticmethod
-	def click(el: WebElement, wait: float = 1.0):
-		el.click()
-		time.sleep(wait)
-
-
-	def extractData(self, url: str, tries: int = 0, browse: bool = True) -> Optional[Customer]:
-		if tries < 5:
-			if browse:
-				self.browser.get(url)
-				time.sleep(0.75)
-
-			phonePrefix = '+ 41'
-			phoneContainer = self.getElement(value='y6YeV')
-			if phoneContainer:
-				phonePrefix = self.getElementInnerHTML(value='DNVgs', rootElement=phoneContainer)
-				match = re.search(r'\+ ([0-9]+)', phonePrefix)
-				if match:
-					phonePrefix = f'+{match.group(1)}'
-			else:
-				print('Page not yet loaded, retry')
-				time.sleep(0.25)
-				return self.extractData(url=url, tries= tries + 1, browse=False)
-
-			birthMonth = 'January'
-			birthMonthContainer = self.getElement(value='tf-1hwfws3')
-			if birthMonthContainer:
-				birthMonth = self.getElementInnerHTML(value='chili-single-select__single-value', rootElement=birthMonthContainer)
-				if not birthMonth:
-					birthMonth = 'January'
-
-			language = 'French'
-			languageContainer = self.getElement(value='tf-1hwfws3')
-			if languageContainer:
-				language = self.getElementInnerHTML(value='chili-single-select__single-value', rootElement=languageContainer)
-				if not language:
-					language = 'French'
-
-			reservations = 0
-			cancellations = 0
-			noShows = 0
-
-			customerBehaviors = self.getElements(value='tf-q2scvx')
-			for info in customerBehaviors:
-				data = self.getElement(value='tf-1enwdf5', rootElement=info).get_attribute('data-restaurant')
-				if data:
-					data = int(data)
-				else:
-					continue
-
-				if info.get_property('innerHTML').endswith('reservations'):
-					reservations = data
-				elif info.get_property('innerHTML').endswith('cancellations'):
-					cancellations = data
-				elif info.get_property('innerHTML').endswith('no-shows'):
-					noShows = data
-
-			customer = Customer(
-				title = 'mr',
-				firstName = self.getInputValue(by=By.NAME, value='firstName'),
-				lastName = self.getInputValue(by=By.NAME, value='lastName'),
-				vip = self.getCheckboxValue(by=By.ID, value='vip'),
-				birthDay = self.getInputValue(by=By.NAME, value='birthDate.day'),
-				birthMonth = birthMonth,
-				birthYear = self.getInputValue(by=By.NAME, value='birthDate.year'),
-				phone = f'{phonePrefix} {self.getInputValue(by=By.NAME, value="phone")}',
-				email = self.getInputValue(by=By.NAME, value='email'),
-				language = language,
-				address = self.getInputValue(by=By.CLASS_NAME, value='addressAutocomplete__input'),
-				newsletter = self.getCheckboxValue(by=By.ID, value='optin'),
-				allergies = '',
-				specialDiet = '',
-				food = self.getInputValue(by=By.NAME, value='favFood'),
-				drinks = self.getInputValue(by=By.NAME, value='favDrinks'),
-				seating = self.getInputValue(by=By.NAME, value='favSeating'),
-				notes = self.getInputValue(by=By.NAME, value='notesOnCustomer'),
-				reservations = reservations,
-				cancellations = cancellations,
-				noShows = noShows
-			)
-			return customer
-		else:
-			raise
-
-
+URL = 'https://manager.thefork.com/api/graphql'
+headers = {
+	'Authorization': f'Bearer {AUTH_TOKEN}'
+}
 
 if __name__ == '__main__':
-	parser = argparse.ArgumentParser(description='TheFork customer data extractor', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-	parser.add_argument('-u', '--port', help='Remote debugging prot', required=False, type=int, default=9222)
-	parser.add_argument('-d', '--debug', help='Limit the extracted data to 15 customers', required=False, type=bool)
-	parser.add_argument('-l', '--load', help='Load customers from file', required=False, type=bool, default=False)
-	args = parser.parse_args()
-	config = vars(args)
+	con = sqlite3.connect('database.sqlite')
+	cursor = con.cursor()
 
-	PORT = config['port']
-	DEBUG = config['debug']
-	LOAD = config['load']
+	try:
+		cursor.execute('''
+			CREATE TABLE IF NOT EXISTS customers(
+				id TEXT PRIMARY KEY UNIQUE,
+				civility TEXT,
+				firstName TEXT,
+				lastName TEXT,
+				email TEXT,
+				phone TEXT,
+				secondaryPhone TEXT,
+				locale TEXT,
+				notes TEXT,
+				optin INTEGER,
+				restaurantOptin TEXT,
+				allergiesAndIntolerances TEXT,
+				status TEXT,
+				isPromoter INTEGER,
+				rank TEXT,
+				computedRank TEXT,
+				isVip INTEGER,
+				dietaryRestrictions TEXT,
+				bookingCount INTEGER,
+				customerReliabilityScore INTEGER,
+				recentNoShowCount INTEGER,
+				recentBookingCount INTEGER,
+				favFood TEXT,
+				favDrinks TEXT,
+				favSeating TEXT,
+				birthDate TEXT,
+				address TEXT,
+				reservations INTEGER,
+				cancellations INTEGER,
+				noShows INTEGER,
+				groupReservations INTEGER,
+				groupCancellations INTEGER,
+				groupNoShows INTEGER,
+				lastUpdated INTEGER
+			)
+		''')
+		con.commit()
+	except sqlite3.Error as e:
+		print(f'Issues with database, cannot continue: {e}')
+		exit(1)
 
-	job = Job(config)
+	if DEBUG:
+		print('DEBUG MODE')
 
-	print('Let me do the job, don\'t touch the browser!')
-	urls = set()
+	print('Loading existing customers')
+	existingUuids = list()
+	newUuids = list()
 
-	if not LOAD:
-		job.searchAndClick(by=By.XPATH, value='//*[@id="mainContent"]/div[1]/div[1]/div[3]/div/div[1]/button') #search button
-		job.searchAndClick(value='tf-zl9zk6', wait=2) #advanced search
+	if not FRESH:
+		cursor.execute('SELECT id FROM customers')
+		results = cursor.fetchall()
+		for result in results:
+			existingUuids.append(result[0])
 
-		i = 1
-		retry_rows = 0
-		retry = 0
-		while True:
-			print(f'Reading page {i}')
-			for link in job.getElements(value='e3st0'):
-				if DEBUG and len(urls) > 14:
+	print('Fetching uuids, please wait....')
+	sortings = [
+		[],
+		[
+			"customerFirstName",
+			"customerLastName"
+		],
+		[
+			"-customerFirstName",
+			"-customerLastName"
+		]
+		,
+		[
+			"-customerFirstName",
+			"customerLastName"
+		],
+		[
+			"customerFirstName",
+			"-customerLastName"
+		],
+		[
+			"reservationMealDate",
+			"reservationMealTime"
+		],
+		[
+			"-reservationMealDate",
+			"-reservationMealTime"
+		],
+		[
+			"-reservationMealDate",
+			"reservationMealTime"
+		],
+		[
+			"reservationMealDate",
+			"-reservationMealTime"
+		]
+	]
+
+	if not RESUME:
+		for j, sorting in enumerate(sortings):
+			# noinspection PyRedeclaration
+			wasCount = len(newUuids)
+			y = 100 if not DEBUG else 15
+
+			for i in range (0, 10000, 100):
+				print(f'Scanning {15 if DEBUG else 100} customers at offset {i}')
+				variables = {
+					"args": {
+						"restaurantId": RESTAURANT_ID,
+						"text": "",
+						"sort": sorting,
+						"filters": {},
+						"highlight": True,
+						"pagination": {
+							"offset": i,
+							"first": y
+						}
+					}
+				}
+
+				response = requests.post(
+					url=URL,
+					json={
+						'query': queries.SEARCH_CUSTOMERS,
+						'variables': variables
+					},
+					headers=headers
+				)
+
+				for result in response.json()['data']['searchCustomers']['results']:
+					uid = result['customer']['id']
+					if uid not in existingUuids and uid not in newUuids:
+						newUuids.append(uid)
+
+				if DEBUG:
 					break
-				url = link.get_attribute('href')
-				result = re.search(r'https://manager\.thefork\.com/customer/(.+)/\?prevPathname=/search', url)
-				if result:
-					urls.add(f'https://manager.thefork.com/customer/{result.group(1)}/details')
 
-			if DEBUG and len(urls) > 14:
+			print(f'Fetching method {j + 1} found {len(newUuids) - wasCount} new customers')
+			wasCount = len(newUuids)
+
+			if DEBUG:
 				break
 
-			try:
-				spans = job.getElements(value='mask')
-				if not spans:
-					retry_rows += 1
-					if retry_rows < 10:
-						print('Button row not found, trying again')
-						time.sleep(0.5)
-						continue
 
-					raise Exception()
+		print(f'Found {len(newUuids)} new customer')
 
-				button = None
-				for span in spans:
-					if span.get_attribute('innerHTML') != 'Next':
-						continue
-
-					button = span.find_element(by=By.XPATH, value='..')
-					break
-
-				if button:
-					if button.is_enabled():
-						i += 1
-						retry = 0
-						retry_rows = 0
-						job.click(button, 0.5)
-					else:
-						retry += 1
-						if retry < 10:
-							print('Button found but not enabled, trying again')
-							time.sleep(0.5)
-							continue
-						raise Exception()
-				else:
-					retry += 1
-					if retry < 10:
-						print('Failed finding button, trying again')
-						time.sleep(0.5)
-						continue
-					else:
-						raise Exception()
-			except:
-				print('That was the last page!')
-				break
+		print('Writing list to database')
+		for uid in newUuids:
+			cursor.execute(
+				'INSERT INTO customers (id) VALUES (:id)',
+				{
+					'id': uid
+				}
+			)
+		con.commit()
 	else:
-		if Path('urls.txt').exists():
-			urls = Path('urls.txt').read_text().splitlines()
+		if not DEBUG:
+			cursor.execute('SELECT id FROM customers WHERE lastUpdated IS NULL')
+			results = cursor.fetchall()
+			for result in results:
+				newUuids.append(result[0])
+		else:
+			cursor.execute('SELECT id FROM customers WHERE lastUpdated IS NULL LIMIT 15')
+			results = cursor.fetchall()
+			for result in results:
+				newUuids.append(result[0])
 
-	print(f'Found {len(urls)} customers')
+		print(f'Found {len(newUuids)} customers to fetch')
 
-	if not LOAD:
-		print('Writing list to file')
-		with open('urls.txt', 'w') as fp:
-			for url in urls:
-				fp.write(f'{url}\n')
+	i = 1
+	if newUuids:
+		print('Fetching customer information, please be patient')
 
-	print('Start data extraction')
+		for uuid in newUuids:
+			print(f'Fetching customer #{i}')
+			variables = {
+				'id': uuid
+			}
+			response = requests.post(
+				url=URL,
+				json={
+					'query':     queries.GET_CUSTOMER,
+					'variables': variables
+				},
+				headers=headers
+			)
 
-	customers = list()
-	for url in urls:
-		try:
-			data = job.extractData(url)
-			customers.append(data)
-		except:
-			print(f'Failed extracting data for customer on url {url}')
+			customerData = response.json()['data']['customer']
 
-	print(f'Extracted {len(customers)} customers')
-	print('Dumping to csv')
+			variables = {
+				"id":             uuid,
+				"restaurantUuid": RESTAURANT_ID,
+				"withSpending":   True
+			}
+			response = requests.post(
+				url=URL,
+				json={
+					'query':     queries.GET_CUSTOMER_STATS,
+					'variables': variables
+				},
+				headers=headers
+			)
 
-	with open('data.csv', 'w') as fp:
-		writer = DataclassWriter(fp, customers, Customer)
-		writer.write()
+			customerStats = response.json()['data']['customer']['reservationStats']
 
-	print('All done!')
+			cursor.execute(
+				'REPLACE INTO customers (id, civility, firstName, lastName, email, phone, secondaryPhone, locale, notes, optin, restaurantOptin, allergiesAndIntolerances, status, isPromoter, rank, computedRank, isVip, dietaryRestrictions, bookingCount, customerReliabilityScore, recentNoShowCount, recentBookingCount, favFood, favDrinks, favSeating, birthDate, address, reservations, cancellations, noShows, groupReservations, groupCancellations, groupNoShows, lastUpdated) VALUES (:id, :civility, :firstName, :lastName, :email, :phone, :secondaryPhone, :locale, :notes, :optin, :restaurantOptin, :allergiesAndIntolerances, :status, :isPromoter, :rank, :computedRank, :isVip, :dietaryRestrictions, :bookingCount, :customerReliabilityScore, :recentNoShowCount, :recentBookingCount, :favFood, :favDrinks, :favSeating, :birthDate, :address, :reservations, :cancellations, :noShows, :groupReservations, :groupCancellations, :groupNoShows, :lastUpdated)',
+				{
+					'id':                       uuid,
+					'civility':                 customerData['civility'],
+					'firstName':                customerData['firstName'],
+					'lastName':                 customerData['lastName'],
+					'email':                    customerData['email'],
+					'phone':                    customerData['phone'],
+					'secondaryPhone':           customerData['secondaryPhone'],
+					'locale':                   customerData['locale'],
+					'notes':                    customerData['notes'],
+					'optin':                    1 if customerData['optin'] else 0,
+					'restaurantOptin':          json.dumps(customerData['restaurantOptin']),
+					'allergiesAndIntolerances': json.dumps(customerData['allergiesAndIntolerances']),
+					'status':                   customerData['status'],
+					'isPromoter':               customerData['isPromoter'],
+					'rank':                     customerData['rank'],
+					'computedRank':             customerData['computedRank'],
+					'isVip':                    1 if customerData['isVip'] else 0,
+					'dietaryRestrictions':      json.dumps(customerData['dietaryRestrictions']),
+					'bookingCount':             customerData['bookingCount'],
+					'customerReliabilityScore': customerData['customerReliabilityScore'],
+					'recentNoShowCount':        customerData['recentNoShowCount'],
+					'recentBookingCount':       customerData['recentBookingCount'],
+					'favFood':                  customerData['favFood'],
+					'favDrinks':                customerData['favDrinks'],
+					'favSeating':               customerData['favSeating'],
+					'birthDate':                customerData['birthDate'],
+					'address':                  customerData['address'],
+					'reservations':             customerStats['reservationRecordedCount'],
+					'cancellations':            customerStats['reservationCanceledCount'],
+					'noShows':                  customerStats['reservationNoShowCount'],
+					'groupReservations':        customerStats['reservationRecordedCountForGroup'],
+					'groupCancellations':       customerStats['reservationCanceledCountForGroup'],
+					'groupNoShows':             customerStats['reservationNoShowCountForGroup'],
+					'lastUpdated':              round(time.time())
+				}
+			)
+			con.commit()
+			i += 1
+	con.close()
