@@ -134,7 +134,7 @@ if __name__ == '__main__':
 			y = 100 if not DEBUG else 15
 
 			for i in range (0, 10000, 100):
-				print(f'Scanning {15 if DEBUG else 100} customers at offset {i}')
+				print(f'\rScanning {15 if DEBUG else 100} customers at offset {i}', end='')
 				variables = {
 					"args": {
 						"restaurantId": RESTAURANT_ID,
@@ -203,7 +203,7 @@ if __name__ == '__main__':
 		print('Fetching customer information, please be patient')
 
 		for uuid in newUuids:
-			print(f'Fetching customer #{i}')
+			print(f'\rFetching customer #{i}', end='')
 			variables = {
 				'id': uuid
 			}
