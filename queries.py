@@ -139,3 +139,82 @@ query getCustomerStatsForReservationForm($id: ID!, $restaurantUuid: ID!, $withSp
   }
 }
 """
+
+GET_CUSTOMER_HISTORY = """
+query GetCustomerHistory($restaurantId: String!, $customerId: String!, $onGroup: Boolean, $orderBy: CustomerReservationOrderByInput) {
+  customerReservations(
+    restaurantUuid: $restaurantId
+    customerUuid: $customerId
+    onGroup: $onGroup
+    orderBy: $orderBy
+  ) {
+    id
+    isOnline
+    bookingOrigin
+    mealDate
+    status
+    partySize
+    tableName
+    customerNote
+    restaurantNote
+    occasions
+    tables {
+      isLocked
+      items {
+        id
+        name
+        __typename
+      }
+      __typename
+    }
+    promoter {
+      id
+      __typename
+    }
+    customer {
+      id
+      firstName
+      lastName
+      status
+      __typename
+    }
+    offerSnapshot {
+      descriptionTags
+      discountPercentage
+      __typename
+    }
+    menu {
+      menuUuid
+      __typename
+    }
+    order {
+      totalPrice
+      currencyIso
+      orderLines {
+        label
+        __typename
+      }
+      __typename
+    }
+    isBurningYums
+    imprint {
+      id
+      __typename
+    }
+    restaurantUuid
+    restaurant {
+      restaurantUuid
+      name
+      __typename
+    }
+    review {
+      id
+      rating
+      comment
+      createdTs
+      __typename
+    }
+    __typename
+  }
+}
+"""
