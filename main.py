@@ -150,7 +150,10 @@ if __name__ == '__main__':
 				},
 				headers=headers
 			)
-			reservations = response.json()['data']['customerReservations']
+			try:
+				reservations = response.json()['data']['customerReservations']
+			except:
+				continue
 
 			for i, reservation in enumerate(reservations):
 				if reservation['id'] in existingReservations:
