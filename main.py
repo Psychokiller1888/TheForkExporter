@@ -1,6 +1,7 @@
 import argparse
 import json
 import time
+from typing import Dict
 
 import requests
 
@@ -29,6 +30,18 @@ URL = 'https://manager.thefork.com/api/graphql'
 headers = {
 	'Authorization': f'Bearer {AUTH_TOKEN}'
 }
+
+
+def checkErrors(resp: Dict) -> bool:
+	if 'errors' in resp:
+		errorStr = json.dumps(resp)
+		if 'unauthorized' in errorStr.lower():
+			print('\nERROR - Please check your authorization token and try again')
+		elif 'no access to restaurant' in errorStr.lower():
+			print('\nERROR - Please check your restaurant id and try again')
+		return False
+	return True
+
 
 if __name__ == '__main__':
 	con = sqlite3.connect('database.sqlite')
@@ -136,7 +149,10 @@ if __name__ == '__main__':
 		customerCount = 0
 		for uuid in uuids:
 			customerCount += 1
-			print(f'\rFetching history for customer #{customerCount} ({uuid})', end='')
+			if customerCount > 15 and DEBUG:
+				break
+
+			print(f'\rFetching history for customer #{customerCount} (actual total historic reservations imported: {count})', end='')
 			variables = {
 				"restaurantId": RESTAURANT_ID,
 				"customerId": uuid,
@@ -157,6 +173,8 @@ if __name__ == '__main__':
 			try:
 				reservations = response.json()['data']['customerReservations']
 			except:
+				if not checkErrors(response.json()):
+					exit(1)
 				continue
 
 			for i, reservation in enumerate(reservations):
@@ -271,7 +289,14 @@ if __name__ == '__main__':
 						headers=headers
 					)
 
-					for result in response.json()['data']['searchCustomers']['results']:
+					try:
+						results = response.json()['data']['searchCustomers']['results']
+					except:
+						if not checkErrors(response.json()):
+							exit(1)
+						continue
+
+					for result in results:
 						uid = result['customer']['id']
 						if uid not in existingUuids and uid not in newUuids:
 							newUuids.append(uid)
@@ -279,7 +304,7 @@ if __name__ == '__main__':
 					if DEBUG:
 						break
 
-				print(f'Fetching method {j + 1} found {len(newUuids) - wasCount} new customers')
+				print(f'\nFetching method {j + 1} found {len(newUuids) - wasCount} new customers')
 				wasCount = len(newUuids)
 
 				if DEBUG:
