@@ -136,7 +136,7 @@ if __name__ == '__main__':
 		customerCount = 0
 		for uuid in uuids:
 			customerCount += 1
-			print(f'\rFetching history for customer {customerCount} ({uuid})', end='')
+			print(f'\rFetching history for customer #{customerCount} ({uuid})', end='')
 			variables = {
 				"restaurantId": RESTAURANT_ID,
 				"customerId": uuid,
@@ -189,9 +189,8 @@ if __name__ == '__main__':
 					               'restaurant':     json.dumps(reservation['restaurant']),
 					               'review':         json.dumps(reservation['review'])
 				               })
-				con.commit()
-		print('')
-		print(f'Inserted a total of {count} historic reservations')
+			con.commit()
+		print(f'\nInserted a total of {count} historic reservations for {customerCount} customers ({round(count / customerCount, 2)} reservation per customer)')
 	else:
 		print('Loading existing customers')
 		existingUuids = list()
