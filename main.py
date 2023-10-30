@@ -116,11 +116,13 @@ if __name__ == '__main__':
 		uuids = list()
 		existingReservations = list()
 
-		print('Load existing history')
+		print('Loading existing history')
 		cursor.execute(f'SELECT id FROM history')
 		results = cursor.fetchall()
 		for result in results:
 			existingReservations.append(result[0])
+
+		print(f'Loaded {len(existingReservations)} historic reservations')
 
 		print('Loading customers')
 		cursor.execute(f'SELECT id FROM customers {"LIMIT 15" if DEBUG else ""}')
@@ -131,8 +133,10 @@ if __name__ == '__main__':
 		print(f'Loaded {len(uuids)} customers ids')
 
 		count = 0
+		customerCount = 0
 		for uuid in uuids:
-			print(f'\rFetching history for customer {uuid}', end='')
+			customerCount += 1
+			print(f'\rFetching history for customer {customerCount} ({uuid})', end='')
 			variables = {
 				"restaurantId": RESTAURANT_ID,
 				"customerId": uuid,
