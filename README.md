@@ -21,7 +21,7 @@ pip install -r requirements.txt
 - - Under `Name` look for one, best is the second one in the list, called `graphql` and click on it
 - - In the middle of the dev console, on the `Headers`tab, look for `Query headers` and expend it
 - - Look for `Authorization` and copy the gigantic text after `Bearer`, this is your **authorization token**
-- - **!! DO NEVER EVER SHARE THIS TOKEN !! Even if asked so by me, The Fork, the Microsoft support with the weird Indian accent, or your dad/mom, President, King, Queen whoever**
+- - **!! DON'T EVER EVER SHARE THIS TOKEN !! Even if asked so by me, The Fork, the Microsoft support with the weird Indian accent, or your dad/mom, President, King, Queen whoever**
 - - In the middle of the dev console, on the `Payload` tab expend everything, until you see something like `variables: {restaurantUuid: "asdsdsed-sdsd-sdsd-dsds-dsdsdsdsdasddsd"}`
 - - Copy that weird text, without the double quotes, the `asdsdsed-sdsd-sdsd-dsds-dsdsdsdsdasddsd` similar part. This is your **uuid**
 - Now that we have what we need, let's make the script work and get you your data!
